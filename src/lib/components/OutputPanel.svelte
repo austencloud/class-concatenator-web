@@ -1,33 +1,242 @@
 <script lang="ts">
 	import { appStore } from '$lib/stores/appStore';
-	import { ClassExtractor } from '$lib/utils/classExtractor';
-	import { ImportCollector } from '$lib/utils/importCollector';
+	import type { FileData } from '$lib/stores/appStore';
 
-	let processingProgress = 0;
-	let isProcessing = false;
-	async function readFile(file: File): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = (e) => resolve(e.target?.result as string);
-			reader.onerror = (e) => reject(e);
-			reader.readAsText(file);
-		});
+	// File type processors
+	interface FileProcessor {
+		processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent>;
 	}
 
+	interface ProcessingOptions {
+		includeComments: boolean;
+		sortClasses: boolean;
+		removeDuplicateImports: boolean;
+	}
+
+	interface ProcessedFileContent {
+		fileName: string;
+		originalContent: string;
+		extractedClasses: ClassInfo[];
+		imports: string[];
+	}
+
+	interface ClassInfo {
+		name: string;
+		type: string;
+		inheritance?: string;
+		docstring?: string;
+		content: string;
+	}
+
+	// Processors for different file types
+	class PythonProcessor implements FileProcessor {
+		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
+			const content = await this.readFile(file);
+
+			// Import processing
+			const imports = this.extractImports(content);
+
+			// Class extraction
+			const classes = this.extractClasses(content, options.includeComments);
+
+			// Sort classes if required
+			if (options.sortClasses) {
+				classes.sort((a, b) => a.name.localeCompare(b.name));
+			}
+
+			return {
+				fileName: file.name,
+				originalContent: content,
+				extractedClasses: classes,
+				imports
+			};
+		}
+
+		private async readFile(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = (e) => resolve(e.target?.result as string);
+				reader.onerror = (e) => reject(e);
+				reader.readAsText(file);
+			});
+		}
+
+		private extractImports(content: string): string[] {
+			const importRegex = /^(from\s+\w+\s+import\s+\w+|import\s+\w+)/gm;
+			return Array.from(new Set(content.match(importRegex) || []));
+		}
+
+		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
+			const classPattern = /^\s*class\s+(\w+)(?:\s*\(\s*(\w+)?\s*\))?:\s*(?:"""(.*?)""")?/gms;
+			const classes: ClassInfo[] = [];
+
+			let match;
+			while ((match = classPattern.exec(content)) !== null) {
+				const [fullMatch, className, inheritance, docstring] = match;
+
+				classes.push({
+					name: className,
+					type: 'class',
+					inheritance: inheritance || undefined,
+					docstring: docstring ? docstring.trim() : undefined,
+					content: fullMatch
+				});
+			}
+
+			return classes;
+		}
+	}
+
+	class TypeScriptProcessor implements FileProcessor {
+		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
+			const content = await this.readFile(file);
+
+			// Import processing
+			const imports = this.extractImports(content);
+
+			// Class extraction
+			const classes = this.extractClasses(content, options.includeComments);
+
+			// Sort classes if required
+			if (options.sortClasses) {
+				classes.sort((a, b) => a.name.localeCompare(b.name));
+			}
+
+			return {
+				fileName: file.name,
+				originalContent: content,
+				extractedClasses: classes,
+				imports
+			};
+		}
+
+		private async readFile(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = (e) => resolve(e.target?.result as string);
+				reader.onerror = (e) => reject(e);
+				reader.readAsText(file);
+			});
+		}
+
+		private extractImports(content: string): string[] {
+			const importRegex = /^(import\s+{?[\w\s,]+}?\s+from\s+['"][^'"]+['"])/gm;
+			return Array.from(new Set(content.match(importRegex) || []));
+		}
+
+		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
+			const classPattern = /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/g;
+			const classes: ClassInfo[] = [];
+
+			let match;
+			while ((match = classPattern.exec(content)) !== null) {
+				const [fullMatch, className, inheritance] = match;
+
+				classes.push({
+					name: className,
+					type: 'class',
+					inheritance: inheritance || undefined,
+					content: fullMatch
+				});
+			}
+
+			return classes;
+		}
+	}
+
+	class SvelteProcessor implements FileProcessor {
+		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
+			const content = await this.readFile(file);
+
+			// Extract script content
+			const scriptContent = this.extractScriptContent(content);
+
+			// Import processing
+			const imports = this.extractImports(scriptContent);
+
+			// Class extraction
+			const classes = this.extractClasses(scriptContent, options.includeComments);
+
+			// Sort classes if required
+			if (options.sortClasses) {
+				classes.sort((a, b) => a.name.localeCompare(b.name));
+			}
+
+			return {
+				fileName: file.name,
+				originalContent: content,
+				extractedClasses: classes,
+				imports
+			};
+		}
+
+		private async readFile(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = (e) => resolve(e.target?.result as string);
+				reader.onerror = (e) => reject(e);
+				reader.readAsText(file);
+			});
+		}
+
+		private extractScriptContent(content: string): string {
+			const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+			return scriptMatch ? scriptMatch[1] : '';
+		}
+
+		private extractImports(content: string): string[] {
+			const importRegex = /^import\s+(?:type\s+)?(?:\w+,?\s*)*(?:from\s+['"][^'"]+['"])?/gm;
+			return Array.from(new Set(content.match(importRegex) || []));
+		}
+
+		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
+			const classPattern = /(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/g;
+			const classes: ClassInfo[] = [];
+
+			let match;
+			while ((match = classPattern.exec(content)) !== null) {
+				const [fullMatch, className, inheritance] = match;
+
+				classes.push({
+					name: className,
+					type: 'class',
+					inheritance: inheritance || undefined,
+					content: fullMatch
+				});
+			}
+
+			return classes;
+		}
+	}
+
+	// Processor selection
+	const FILE_PROCESSORS: { [key: string]: FileProcessor } = {
+		'.py': new PythonProcessor(),
+		'.ts': new TypeScriptProcessor(),
+		'.svelte': new SvelteProcessor(),
+		'.js': new TypeScriptProcessor(),
+		'.tsx': new TypeScriptProcessor(),
+		'.jsx': new TypeScriptProcessor()
+	};
+
+	// Component logic
+	let processingProgress = 0;
+	let isProcessing = false;
+	let processedFiles: ProcessedFileContent[] = [];
+
 	async function processFiles() {
+		// Validate file selection
 		if ($appStore.selectedFiles.length === 0) {
 			alert('Please select files to process');
 			return;
 		}
 
+		// Reset processing state
 		isProcessing = true;
 		processingProgress = 0;
+		processedFiles = [];
 
 		try {
-			const results: string[] = [];
-			const classExtractor = new ClassExtractor();
-			const importCollector = new ImportCollector();
-
 			// Get file input from the FileTree component
 			const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
 			const files = fileInput?.files;
@@ -36,43 +245,38 @@
 				throw new Error('No files selected');
 			}
 
+			// Process each file
 			for (let i = 0; i < files.length; i++) {
 				const file = files[i];
+				const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
 
-				if (!file.name.endsWith('.py')) continue;
-
-				const fileContent = await readFile(file);
-
-				// Process imports
-				importCollector.processImports(fileContent);
-
-				// Extract classes
-				const classes = classExtractor.extractClasses(
-					fileContent,
-					$appStore.processingOptions.includeComments
-				);
-
-				// Sort classes if option is enabled
-				if ($appStore.processingOptions.sortClasses) {
-					classes.sort((a, b) => a.name.localeCompare(b.name));
+				// Select appropriate processor
+				const processor = FILE_PROCESSORS[fileExt];
+				if (!processor) {
+					console.warn(`Unsupported file type: ${file.name}`);
+					continue;
 				}
 
-				// Add file header and content
-				results.push(`\n\n# File: ${file.name}`);
-				results.push(fileContent);
+				// Process file
+				const processedFile = await processor.processFile(file, $appStore.processingOptions);
 
+				processedFiles.push(processedFile);
+
+				// Update progress
 				processingProgress = Math.floor(((i + 1) / files.length) * 100);
 			}
 
-			// Generate final output
-			const outputContent = [
-				// Add import block if needed
-				$appStore.processingOptions.removeDuplicateImports
-					? importCollector.generateImportBlock()
-					: '',
-				...results
-			].join('\n');
+			// Generate output content
+			const outputContent = processedFiles
+				.map(
+					(file) =>
+						`\n\n# File: ${file.fileName}\n` +
+						(file.imports.length > 0 ? file.imports.join('\n') + '\n' : '') +
+						file.originalContent
+				)
+				.join('\n');
 
+			// Update app store
 			appStore.setOutputContent(outputContent);
 		} catch (error) {
 			console.error('Processing error:', error);
@@ -102,7 +306,7 @@
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = 'concatenated_classes.py';
+		link.download = 'concatenated_files.txt';
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
@@ -171,6 +375,11 @@
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
+	}
+
+	.output-actions button:disabled {
+		background-color: #cccccc;
+		cursor: not-allowed;
 	}
 
 	.progress-bar {
