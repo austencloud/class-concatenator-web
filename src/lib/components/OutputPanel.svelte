@@ -5,7 +5,6 @@
 
 	let processingProgress = 0;
 	let isProcessing = false;
-
 	async function readFile(file: File): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -29,8 +28,9 @@
 			const classExtractor = new ClassExtractor();
 			const importCollector = new ImportCollector();
 
-			const fileInputs = document.querySelector('input[type="file"]') as HTMLInputElement;
-			const files = fileInputs.files;
+			// Get file input from the FileTree component
+			const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+			const files = fileInput?.files;
 
 			if (!files) {
 				throw new Error('No files selected');
