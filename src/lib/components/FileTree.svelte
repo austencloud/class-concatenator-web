@@ -4,12 +4,12 @@
 
 	// Define supported file extensions
 	const SUPPORTED_EXTENSIONS = [
-		'.py',   // Python
-		'.ts',   // TypeScript
-		'.js',   // JavaScript
+		'.py', // Python
+		'.ts', // TypeScript
+		'.js', // JavaScript
 		'.svelte', // Svelte
-		'.tsx',  // TypeScript React
-		'.jsx'   // JavaScript React
+		'.tsx', // TypeScript React
+		'.jsx' // JavaScript React
 	];
 
 	let files: FileData[] = [];
@@ -22,12 +22,14 @@
 			if (item.isFile) {
 				(item as FileSystemFileEntry).file((file: File) => {
 					// Check if file has a supported extension
-					if (SUPPORTED_EXTENSIONS.some(ext => file.name.endsWith(ext))) {
-						resolve([{
-							path: path + file.name,
-							name: file.name,
-							isSelected: true
-						}]);
+					if (SUPPORTED_EXTENSIONS.some((ext) => file.name.endsWith(ext))) {
+						resolve([
+							{
+								path: path + file.name,
+								name: file.name,
+								isSelected: true
+							}
+						]);
 					} else {
 						resolve([]);
 					}
@@ -35,10 +37,10 @@
 			} else if (item.isDirectory) {
 				const dirReader = (item as FileSystemDirectoryEntry).createReader();
 				dirReader.readEntries(async (entries) => {
-					const filePromises = entries.map(async (entry) => 
-						await traverseFileTree(entry, path + item.name + '/')
+					const filePromises = entries.map(
+						async (entry) => await traverseFileTree(entry, path + item.name + '/')
 					);
-					
+
 					const nestedFiles = await Promise.all(filePromises);
 					resolve(nestedFiles.flat());
 				});
@@ -56,23 +58,28 @@
 		const input = event.target as HTMLInputElement;
 		if (!input.files) return;
 
-		// Use FileSystem API for recursive traversal
-		const items = Array.from(input.files).map(file => 
-			(file as any).webkitGetAsEntry()
-		).filter(Boolean);
-
-		// Collect files recursively
-		const fileDataPromises = items.map(item => traverseFileTree(item));
-		const fileDataResults = await Promise.all(fileDataPromises);
-		
-		// Flatten and deduplicate files
-		files = Array.from(new Set(fileDataResults.flat()));
-
-		// Clear previous selections and add new files
+		// Reset files and app store first
+		files = [];
 		appStore.reset();
+
+		// Convert FileList to array and process each file
+		const fileArray = Array.from(input.files);
+
+		// Filter for supported file types
+		const supportedFiles = fileArray.filter((file) =>
+			SUPPORTED_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext.toLowerCase()))
+		);
+
+		// Convert supported files to FileData
+		files = supportedFiles.map((file) => ({
+			path: file.webkitRelativePath || file.name,
+			name: file.name,
+			isSelected: true
+		}));
+
+		// Add files to app store
 		files.forEach((file) => appStore.addFile(file));
 	}
-
 	function toggleFileSelection(file: FileData) {
 		file.isSelected = !file.isSelected;
 
@@ -93,9 +100,7 @@
 
 <div class="file-tree-container">
 	<div class="file-tree-header">
-		<button class="select-directory-btn" on:click={loadDirectory}> 
-			Select Folder 
-		</button>
+		<button class="select-directory-btn" on:click={loadDirectory}> Select Folder </button>
 		<input
 			type="file"
 			bind:this={fileInput}
@@ -196,7 +201,9 @@
 	}
 
 	.file-item.selected {
-		background-color: #e0e0e0;
+		background-color: #d1fae5; /* Tailwind's emerald-100 */
+		border-left: 4px solid #10b981; /* Tailwind's emerald-500 */
+		font-weight: 600;
 	}
 
 	.file-item input[type='checkbox'] {

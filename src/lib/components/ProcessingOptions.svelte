@@ -8,13 +8,6 @@
 		});
 	}
 
-	function updateRemoveDuplicates(event: Event) {
-		const target = event.target as HTMLInputElement;
-		appStore.updateProcessingOptions({
-			removeDuplicateImports: target.checked
-		});
-	}
-
 	function updateIncludeComments(event: Event) {
 		const target = event.target as HTMLInputElement;
 		appStore.updateProcessingOptions({
@@ -34,17 +27,6 @@
 				on:change={updateSortClasses}
 			/>
 			Sort Classes Alphabetically
-		</label>
-	</div>
-
-	<div class="option-group">
-		<label class="option-label">
-			<input
-				type="checkbox"
-				checked={$appStore.processingOptions.removeDuplicateImports}
-				on:change={updateRemoveDuplicates}
-			/>
-			Remove Duplicate Imports
 		</label>
 	</div>
 

@@ -2,7 +2,6 @@ import { writable } from 'svelte/store';
 
 export interface ProcessingOptions {
   sortClasses: boolean;
-  removeDuplicateImports: boolean;
   includeComments: boolean;
 }
 
@@ -18,7 +17,6 @@ function createAppStore() {
     currentDirectory: '',
     processingOptions: {
       sortClasses: false,
-      removeDuplicateImports: true,
       includeComments: true
     } as ProcessingOptions,
     outputContent: '',
@@ -52,7 +50,6 @@ function createAppStore() {
       currentDirectory: '',
       processingOptions: {
         sortClasses: false,
-        removeDuplicateImports: true,
         includeComments: true
       },
       outputContent: '',

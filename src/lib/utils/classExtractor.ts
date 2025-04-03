@@ -4,6 +4,7 @@ interface ClassDefinition {
 	content: string;
 	docstring: string;
 }
+const DEBUG_MODE = false; // set to true to see debug logs
 
 export class ClassExtractor {
 	private classPattern = /^\s*class\s+(\w+)\s*(?:\((.*?)\))?:\s*$/gm;
@@ -11,9 +12,10 @@ export class ClassExtractor {
 	private indentPattern = /^(\s*)/gm;
 
 	stripComments(content: string): string {
-		// Ensure content is a string and not undefined
 		if (typeof content !== 'string') {
-			console.warn('stripComments received non-string input');
+			if (DEBUG_MODE) {
+				console.warn('[ClassExtractor] stripComments received non-string input');
+			}
 			return '';
 		}
 
@@ -82,24 +84,20 @@ export class ClassExtractor {
 		fileContent: string | undefined,
 		includeComments: boolean = true
 	): ClassDefinition[] {
-		// Handle undefined or null input
 		if (!fileContent) {
-			console.warn('extractClasses received undefined or null input');
+			if (DEBUG_MODE) {
+				console.warn('[ClassExtractor] extractClasses received undefined or null input');
+			}
 			return [];
 		}
 
-		// Strip comments if needed
 		const processedContent = includeComments ? fileContent : this.stripComments(fileContent);
 
 		const classes: ClassDefinition[] = [];
-
-		// Use safe match method
 		const matches = processedContent.match(this.classPattern) || [];
 
-		// Iterate through matches safely
 		Array.from(matches).forEach((matchStr, index) => {
 			const match = this.classPattern.exec(matchStr);
-
 			if (!match) return;
 
 			const className = match[1] || '';

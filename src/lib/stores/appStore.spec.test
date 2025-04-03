@@ -1,0 +1,36 @@
+import { describe, it, expect } from 'vitest';
+import { appStore } from './appStore';
+import type { FileData } from './appStore';
+
+describe('appStore', () => {
+	it('should add a file', () => {
+		const testFile: FileData = { path: 'some/path', name: 'testFile.ts', isSelected: true };
+
+		appStore.addFile(testFile);
+		let storeValue: any;
+		appStore.subscribe((val) => (storeValue = val))();
+
+		expect(storeValue.selectedFiles).toContainEqual(testFile);
+	});
+
+	it('should remove a file', () => {
+		const testFile: FileData = { path: 'delete/me', name: 'deleteMe.ts', isSelected: true };
+		appStore.addFile(testFile);
+
+		appStore.removeFile(testFile.path);
+		let storeValue: any;
+		appStore.subscribe((val) => (storeValue = val))();
+
+		expect(storeValue.selectedFiles).not.toContainEqual(testFile);
+	});
+
+	it('should reset store', () => {
+		appStore.addFile({ path: 'foo', name: 'foo.ts', isSelected: true });
+		appStore.reset();
+		let storeValue: any;
+		appStore.subscribe((val) => (storeValue = val))();
+
+		expect(storeValue.selectedFiles.length).toBe(0);
+		expect(storeValue.outputContent).toBe('');
+	});
+});

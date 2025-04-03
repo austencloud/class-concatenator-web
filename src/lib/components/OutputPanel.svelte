@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { appStore } from '$lib/stores/appStore';
 	import type { FileData } from '$lib/stores/appStore';
+	import { readFileAsText } from '$lib/utils/fileUtils';
+
+	const DEBUG_MODE = false; // toggle if you want console logs
 
 	// File type processors
 	interface FileProcessor {
@@ -10,14 +13,12 @@
 	interface ProcessingOptions {
 		includeComments: boolean;
 		sortClasses: boolean;
-		removeDuplicateImports: boolean;
 	}
 
 	interface ProcessedFileContent {
 		fileName: string;
 		originalContent: string;
 		extractedClasses: ClassInfo[];
-		imports: string[];
 	}
 
 	interface ClassInfo {
@@ -28,18 +29,12 @@
 		content: string;
 	}
 
-	// Processors for different file types
 	class PythonProcessor implements FileProcessor {
 		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
-			const content = await this.readFile(file);
+			const content = await readFileAsText(file);
 
-			// Import processing
-			const imports = this.extractImports(content);
-
-			// Class extraction
 			const classes = this.extractClasses(content, options.includeComments);
 
-			// Sort classes if required
 			if (options.sortClasses) {
 				classes.sort((a, b) => a.name.localeCompare(b.name));
 			}
@@ -47,23 +42,8 @@
 			return {
 				fileName: file.name,
 				originalContent: content,
-				extractedClasses: classes,
-				imports
+				extractedClasses: classes
 			};
-		}
-
-		private async readFile(file: File): Promise<string> {
-			return new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = (e) => resolve(e.target?.result as string);
-				reader.onerror = (e) => reject(e);
-				reader.readAsText(file);
-			});
-		}
-
-		private extractImports(content: string): string[] {
-			const importRegex = /^(from\s+\w+\s+import\s+\w+|import\s+\w+)/gm;
-			return Array.from(new Set(content.match(importRegex) || []));
 		}
 
 		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
@@ -73,7 +53,6 @@
 			let match;
 			while ((match = classPattern.exec(content)) !== null) {
 				const [fullMatch, className, inheritance, docstring] = match;
-
 				classes.push({
 					name: className,
 					type: 'class',
@@ -89,15 +68,10 @@
 
 	class TypeScriptProcessor implements FileProcessor {
 		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
-			const content = await this.readFile(file);
+			const content = await readFileAsText(file);
 
-			// Import processing
-			const imports = this.extractImports(content);
-
-			// Class extraction
 			const classes = this.extractClasses(content, options.includeComments);
 
-			// Sort classes if required
 			if (options.sortClasses) {
 				classes.sort((a, b) => a.name.localeCompare(b.name));
 			}
@@ -105,33 +79,18 @@
 			return {
 				fileName: file.name,
 				originalContent: content,
-				extractedClasses: classes,
-				imports
+				extractedClasses: classes
 			};
 		}
 
-		private async readFile(file: File): Promise<string> {
-			return new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = (e) => resolve(e.target?.result as string);
-				reader.onerror = (e) => reject(e);
-				reader.readAsText(file);
-			});
-		}
-
-		private extractImports(content: string): string[] {
-			const importRegex = /^(import\s+{?[\w\s,]+}?\s+from\s+['"][^'"]+['"])/gm;
-			return Array.from(new Set(content.match(importRegex) || []));
-		}
-
 		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
+			// Basic naive extraction
 			const classPattern = /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/g;
 			const classes: ClassInfo[] = [];
 
 			let match;
 			while ((match = classPattern.exec(content)) !== null) {
 				const [fullMatch, className, inheritance] = match;
-
 				classes.push({
 					name: className,
 					type: 'class',
@@ -139,25 +98,17 @@
 					content: fullMatch
 				});
 			}
-
 			return classes;
 		}
 	}
 
 	class SvelteProcessor implements FileProcessor {
 		async processFile(file: File, options: ProcessingOptions): Promise<ProcessedFileContent> {
-			const content = await this.readFile(file);
+			const content = await readFileAsText(file);
 
-			// Extract script content
 			const scriptContent = this.extractScriptContent(content);
-
-			// Import processing
-			const imports = this.extractImports(scriptContent);
-
-			// Class extraction
 			const classes = this.extractClasses(scriptContent, options.includeComments);
 
-			// Sort classes if required
 			if (options.sortClasses) {
 				classes.sort((a, b) => a.name.localeCompare(b.name));
 			}
@@ -165,28 +116,13 @@
 			return {
 				fileName: file.name,
 				originalContent: content,
-				extractedClasses: classes,
-				imports
+				extractedClasses: classes
 			};
-		}
-
-		private async readFile(file: File): Promise<string> {
-			return new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = (e) => resolve(e.target?.result as string);
-				reader.onerror = (e) => reject(e);
-				reader.readAsText(file);
-			});
 		}
 
 		private extractScriptContent(content: string): string {
 			const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/);
 			return scriptMatch ? scriptMatch[1] : '';
-		}
-
-		private extractImports(content: string): string[] {
-			const importRegex = /^import\s+(?:type\s+)?(?:\w+,?\s*)*(?:from\s+['"][^'"]+['"])?/gm;
-			return Array.from(new Set(content.match(importRegex) || []));
 		}
 
 		private extractClasses(content: string, includeComments: boolean): ClassInfo[] {
@@ -196,7 +132,6 @@
 			let match;
 			while ((match = classPattern.exec(content)) !== null) {
 				const [fullMatch, className, inheritance] = match;
-
 				classes.push({
 					name: className,
 					type: 'class',
@@ -204,12 +139,10 @@
 					content: fullMatch
 				});
 			}
-
 			return classes;
 		}
 	}
 
-	// Processor selection
 	const FILE_PROCESSORS: { [key: string]: FileProcessor } = {
 		'.py': new PythonProcessor(),
 		'.ts': new TypeScriptProcessor(),
@@ -219,15 +152,19 @@
 		'.jsx': new TypeScriptProcessor()
 	};
 
-	// Component logic
 	let processingProgress = 0;
 	let isProcessing = false;
 	let processedFiles: ProcessedFileContent[] = [];
+	let errorMessage: string = '';
 
+	// Called by button in UI
 	async function processFiles() {
+		// Clear any previous errors
+		errorMessage = '';
+
 		// Validate file selection
 		if ($appStore.selectedFiles.length === 0) {
-			alert('Please select files to process');
+			errorMessage = 'Please select files to process';
 			return;
 		}
 
@@ -237,50 +174,60 @@
 		processedFiles = [];
 
 		try {
-			// Get file input from the FileTree component
 			const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
 			const files = fileInput?.files;
-
 			if (!files) {
 				throw new Error('No files selected');
 			}
 
-			// Process each file
-			for (let i = 0; i < files.length; i++) {
-				const file = files[i];
-				const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+			if (DEBUG_MODE) {
+				console.log('===== FILE PROCESSING START =====');
+				console.log('Total files in input:', files.length);
+			}
 
-				// Select appropriate processor
+			// Filter to only supported types
+			const supportedFiles = Array.from(files).filter((file) => {
+				const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+				return FILE_PROCESSORS[fileExt] !== undefined;
+			});
+
+			if (DEBUG_MODE) {
+				console.log(`Total files: ${files.length}, Supported files: ${supportedFiles.length}`);
+			}
+
+			// Simple concatenation approach
+			let combinedOutput = '';
+
+			for (let i = 0; i < supportedFiles.length; i++) {
+				const file = supportedFiles[i];
+				const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
 				const processor = FILE_PROCESSORS[fileExt];
+
 				if (!processor) {
-					console.warn(`Unsupported file type: ${file.name}`);
+					// Shouldn't happen, but just in case
 					continue;
 				}
 
-				// Process file
 				const processedFile = await processor.processFile(file, $appStore.processingOptions);
-
 				processedFiles.push(processedFile);
 
-				// Update progress
-				processingProgress = Math.floor(((i + 1) / files.length) * 100);
+				// Add a file header and original content
+				combinedOutput += `\n\n# File: ${processedFile.fileName}\n${processedFile.originalContent}`;
+
+				processingProgress = Math.floor(((i + 1) / supportedFiles.length) * 100);
 			}
 
-			// Generate output content
-			const outputContent = processedFiles
-				.map(
-					(file) =>
-						`\n\n# File: ${file.fileName}\n` +
-						(file.imports.length > 0 ? file.imports.join('\n') + '\n' : '') +
-						file.originalContent
-				)
-				.join('\n');
+			// Save to store
+			appStore.setOutputContent(combinedOutput.trim());
 
-			// Update app store
-			appStore.setOutputContent(outputContent);
-		} catch (error) {
-			console.error('Processing error:', error);
-			alert(`Error processing files: ${error}`);
+			if (DEBUG_MODE) {
+				console.log('===== FILE PROCESSING END =====');
+			}
+		} catch (error: any) {
+			if (DEBUG_MODE) {
+				console.error('Processing error:', error);
+			}
+			errorMessage = error?.message || `Error processing files: ${error}`;
 		} finally {
 			isProcessing = false;
 			processingProgress = 0;
@@ -291,17 +238,16 @@
 		if ($appStore.outputContent) {
 			navigator.clipboard
 				.writeText($appStore.outputContent)
-				.then(() => alert('Copied to clipboard'))
-				.catch((err) => console.error('Could not copy text: ', err));
+				.then(() => (errorMessage = 'Copied to clipboard!'))
+				.catch((err) => (errorMessage = `Could not copy: ${err}`));
 		}
 	}
 
 	function saveToFile() {
 		if (!$appStore.outputContent) {
-			alert('No content to save');
+			errorMessage = 'No content to save';
 			return;
 		}
-
 		const blob = new Blob([$appStore.outputContent], { type: 'text/plain' });
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
@@ -318,18 +264,24 @@
 	<div class="output-panel-header">
 		<h3>Concatenated Output</h3>
 		<div class="output-actions">
-			<button
-				on:click={processFiles}
-				disabled={isProcessing || $appStore.selectedFiles.length === 0}
-			>
+			<button on:click={processFiles} disabled={isProcessing || $appStore.selectedFiles.length === 0}>
 				{isProcessing ? 'Processing...' : 'Process Files'}
 			</button>
 			<button on:click={copyToClipboard} disabled={!$appStore.outputContent}>
 				Copy to Clipboard
 			</button>
-			<button on:click={saveToFile} disabled={!$appStore.outputContent}> Save to File </button>
+			<button on:click={saveToFile} disabled={!$appStore.outputContent}>
+				Save to File
+			</button>
 		</div>
 	</div>
+
+	<!-- Show error or info messages here -->
+	{#if errorMessage}
+		<div class="error-message">
+			{errorMessage}
+		</div>
+	{/if}
 
 	{#if isProcessing}
 		<div class="progress-bar">
@@ -407,5 +359,11 @@
 	.placeholder {
 		color: #888;
 		text-align: center;
+	}
+
+	.error-message {
+		padding: 5px 10px;
+		color: #b00;
+		font-weight: bold;
 	}
 </style>
